@@ -6,6 +6,7 @@ from framework_common.utils.random_str import random_str
 
 async def manshuo_draw(json_img):
     json_img = json_check(json_img)
+    print(json_img)
     json={'input': json_img, 'filename': random_str(), 'format': 'png'}
     resp = requests.post(
         'http://127.0.0.1:5600/render',
