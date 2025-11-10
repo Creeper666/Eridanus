@@ -1,10 +1,11 @@
 from framework_common.manshuo_draw.core import *
 import asyncio
+from framework_common.utils.random_str import random_str
 
 
 async def manshuo_draw(json_img):
     json_img = json_check(json_img)
-    json={'input': json_img, 'filename': str(uuid.uuid4()), 'format': 'png'}
+    json={'input': json_img, 'filename': random_str(), 'format': 'png'}
     resp = requests.post(
         'http://127.0.0.1:5600/render',
         json=json

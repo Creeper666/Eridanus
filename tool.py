@@ -121,12 +121,12 @@ def updaat(f=False, source=None, yamls:dict=None):
     if not yamls:
         yamls = {}
     sources = [
-        "https://github.com/avilliai/Eridanus.git",
-        "https://github.akams.cn/https://github.com/avilliai/Eridanus.git",
-        "https://github.moeyy.xyz/https://github.com/avilliai/Eridanus",
-        "https://mirror.ghproxy.com/https://github.com/avilliai/Eridanus",
-        "https://ghfast.top/https://github.com/avilliai/Eridanus.git",
-        "https://gh.llkk.cc/https://github.com/avilliai/Eridanus.git"
+        "https://github.com/Creeper666/Eridanus.git",
+        "https://github.akams.cn/https://github.com/Creeper666/Eridanus.git",
+        "https://github.moeyy.xyz/https://github.com/Creeper666/Eridanus",
+        "https://mirror.ghproxy.com/https://github.com/Creeper666/Eridanus",
+        "https://ghfast.top/https://github.com/Creeper666/Eridanus.git",
+        "https://gh.llkk.cc/https://github.com/Creeper666/Eridanus.git"
     ]
     if source is None:
         for i in sources:
