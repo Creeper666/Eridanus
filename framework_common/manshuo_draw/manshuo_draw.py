@@ -1,5 +1,6 @@
 from framework_common.manshuo_draw.core import *
 import asyncio
+import requests
 from framework_common.utils.random_str import random_str
 
 
