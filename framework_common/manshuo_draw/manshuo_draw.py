@@ -4,10 +4,14 @@ import asyncio
 
 async def manshuo_draw(json_img):
     json_img = json_check(json_img)
-    img_path = await asyncio.to_thread(
-        lambda: asyncio.run(deal_img(json_img))
+    json={'input': json_img, 'filename': str(uuid.uuid4()), 'format': 'png'}
+    resp = requests.post(
+        'http://127.0.0.1:5600/render',
+        json=json
     )
-
+    resp.raise_for_status()
+    result = resp.json()
+    img_path = result['file']
     del json_img
     return img_path
 
