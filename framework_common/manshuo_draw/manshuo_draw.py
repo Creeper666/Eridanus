@@ -2,11 +2,12 @@ from framework_common.manshuo_draw.core import *
 import asyncio
 import requests
 from framework_common.utils.random_str import random_str
+from developTools.utils.logger import get_logger
 
-
+logger = get_logger()
 async def manshuo_draw(json_img):
     json_img = json_check(json_img)
-    print(json_img)
+    logger.info(f"json_img: {json_img}")
     json={'input': json_img, 'filename': random_str(), 'format': 'png'}
     resp = requests.post(
         'http://127.0.0.1:5600/render',
@@ -22,7 +23,7 @@ async def test():
     draw_json = await menu_maker()
 
     img_path = await manshuo_draw(draw_json['page1'])
-    print(img_path)
+    logger.info(f"img_path: {img_path}")
 
 if __name__ == '__main__':
 
