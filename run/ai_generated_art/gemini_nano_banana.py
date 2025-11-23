@@ -188,11 +188,11 @@ def main(bot: ExtendBot, config):
                             if img_url.startswith("data:image/"):
                                 b64_url = f"base64://{img_url}"
                                 # base64 图片
-                                # b64_match = re.search(r'data:image/[^;]+;base64,([a-zA-Z0-9+/]+={0,2})', img_url)
-                                # if b64_match:
+                                b64_match = re.search(r'data:image/[^;]+;base64,([a-zA-Z0-9+/]+={0,2})', img_url)
+                                if b64_match:
                                 #     hasImage = True
-                                #     b64_data = b64_match.group(1)
-                                #     b64_url = f"base64://{b64_data}"
+                                    b64_img_data = b64_match.group(1)
+                                    b64_url = f"base64://{b64_img_data}"
                             else:
                                 # http(s) 图片链接
                                 b64_url = img_url
