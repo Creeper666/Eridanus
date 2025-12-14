@@ -25,7 +25,6 @@ from developTools.utils.logger import get_logger
 
 logger = get_logger()
 
-
 # 使用记录文件路径
 USAGE_FILE_PATH = Path("data/uses.json")
 
