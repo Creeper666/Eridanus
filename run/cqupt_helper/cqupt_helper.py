@@ -82,8 +82,10 @@ def main(bot: ExtendBot, config):
         data = {"stu_num": target_stu_id}
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, data=data)
+            # error_msg = traceback.format_exc()
+            logger.info(f"Get course table response: {response.status_code}, {response.text}")
             response.raise_for_status()
-            return response.json()["data"]["courseTable"]
+            return response.json()["data"]
 
     def process_course_data(raw_data):
         # 20 weeks, 7 days (Mon=0 to Sun=6)
