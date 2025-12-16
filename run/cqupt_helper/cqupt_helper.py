@@ -309,7 +309,7 @@ def main(bot: ExtendBot, config):
                     msg += f"📍 {c.get('classroom')}\n"
                     msg += f"👨‍🏫 {c.get('teacher')}\n"
                     msg += f"⏰ {c.get('lesson')} ({time_range})\n"
-                    msg = msg.rstrip("\n")
+                msg = msg.rstrip("\n")
                 await bot.send(event, Text(msg))
                 
             except Exception as e:
