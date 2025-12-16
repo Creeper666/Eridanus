@@ -156,7 +156,8 @@ def main(bot: ExtendBot, config):
                     await bot.send(event, Text(f"学号 {stu_id} 课表绑定成功！"))
                     
                 except Exception as e:
-                    logger.error(f"Get course table failed: {e}")
+                    error_msg = traceback.format_exc()
+                    logger.error(f"Get course table failed: {e}\n{error_msg}")
                     await bot.send(event, Text(f"获取课表失败: {e}"))
                     
             except Exception as e:
