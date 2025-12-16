@@ -64,6 +64,7 @@ def main(bot: ExtendBot, config):
     async def login() -> str:
         """Login with default credentials"""
         url = "https://be-dev.redrock.cqupt.edu.cn/magipoke/token"
+        logger.info(f"Login with username: {default_username}")
         data = {"stuNum": str(default_username), "idNum": str(default_password)}
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=HEADER, json=data)
