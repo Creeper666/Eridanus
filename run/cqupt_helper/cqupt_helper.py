@@ -79,7 +79,7 @@ def main(bot: ExtendBot, config):
         headers = HEADER.copy()
         headers["Authorization"] = f"Bearer {token}"
         # Use form data as requested: body content stu_num=...
-        data = {"stu_num": target_stu_id}
+        data = f"stu_num={target_stu_id}"
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, data=data)
             # error_msg = traceback.format_exc()
