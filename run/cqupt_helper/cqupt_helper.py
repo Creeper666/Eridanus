@@ -78,9 +78,12 @@ def main(bot: ExtendBot, config):
         url = "https://be-dev.redrock.cqupt.edu.cn/magipoke-jwzx/kebiao"
         headers = HEADER.copy()
         headers["Authorization"] = f"Bearer {token}"
+        headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+        
         # Use form data as requested: body content stu_num=...
         data = f"stu_num={target_stu_id}".encode("utf-8")
         logger.info(f"Get course table request: {data}")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, content=data)
             # error_msg = traceback.format_exc()
