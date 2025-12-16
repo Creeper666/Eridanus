@@ -170,3 +170,90 @@ def main(bot: ExtendBot, config):
             except Exception as e:
                 logger.error(f"Binding error: {e}")
                 await bot.send(event, Text(f"绑定出错: {e}"))
+        
+        elif text_command in ["今天课表", "明天课表"]:
+            try:
+                db = await AsyncSQLiteDatabase.get_instance()
+                user_data = await db.read_user(sender_id)
+                cqupt_data = user_data.get("cqupt", {})
+                
+                if not cqupt_data or not cqupt_data.get("course_table"):
+                    await bot.send(event, Text("请先绑定课表，发送：课表绑定+学号"))
+                    return
+                
+                course_table = cqupt_data.get("course_table")
+
+                # Determine target date
+                target_date = datetime.date.today()
+                if text_command == "明天课表":
+                    target_date += datetime.timedelta(days=1)
+                
+                # Helper to parse date from config
+                def parse_config_date(cfg_date):
+                    if not cfg_date: return None
+                    try:
+                        return datetime.date(int(cfg_date['year']), int(cfg_date['month']), int(cfg_date['day']))
+                    except:
+                        return None
+
+                # Get semester start dates from config
+                cfg = config.cqupt_helper.config
+                fall_start = parse_config_date(cfg.get("semester_start_fall"))
+                spring_start = parse_config_date(cfg.get("semester_start_spring"))
+                
+                # Determine current semester start
+                # Select the latest start date that is before or equal to target_date
+                candidates = [d for d in [fall_start, spring_start] if d and d <= target_date]
+                if candidates:
+                    current_start = max(candidates)
+                else:
+                    # Fallback to the one closest to target_date if both are in future (unlikely) or none valid
+                    valid_dates = [d for d in [fall_start, spring_start] if d]
+                    if valid_dates:
+                        current_start = min(valid_dates, key=lambda x: abs((target_date - x).days))
+                    else:
+                        await bot.send(event, Text("未配置学期开始时间，请联系管理员"))
+                        return
+                
+                # Calculate week and day
+                # delta.days gives days difference. 
+                # Week 1 starts at day 0. 
+                # If start is Monday: 0-6 is week 1.
+                delta_days = (target_date - current_start).days
+                week = (delta_days // 7) + 1
+                day_idx = target_date.weekday() # 0=Mon, 6=Sun
+                
+                # Week validation
+                if week < 1 or week > 20:
+                    await bot.send(event, Text(f"当前是第{week}周，不在学期课程安排范围内（1-20周）。"))
+                    return
+                
+                # Fetch courses
+                try:
+                    # course_table is [week-1][day_idx]
+                    courses = course_table[week-1][day_idx]
+                except IndexError:
+                    courses = []
+                
+                if not courses:
+                    await bot.send(event, Text(f"📅 第{week}周 {target_date.strftime('%Y-%m-%d')}\n今天没课，好好休息吧！"))
+                    return
+                
+                # Sort by begin_lesson
+                courses.sort(key=lambda x: x.get("begin_lesson", 0))
+                
+                # Format message
+                week_days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+                msg = f"📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n"
+                for c in courses:
+                    msg += f"----------------\n"
+                    msg += f"📖 {c.get('course')}\n"
+                    msg += f"📍 {c.get('classroom')}\n"
+                    msg += f"👨‍🏫 {c.get('teacher')}\n"
+                    msg += f"⏰ {c.get('lesson')}\n"
+                
+                await bot.send(event, Text(msg))
+                
+            except Exception as e:
+                logger.error(f"Query course error: {e}")
+                await bot.send(event, Text(f"查询出错: {e}"))
