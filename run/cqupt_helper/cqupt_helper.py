@@ -25,6 +25,7 @@ from run.streaming_media.service.Link_parsing.Link_parsing import bangumi_PILimg
 from run.system_plugin.func_collection import trigger_tasks
 from framework_common.database_util.ManShuoDrawCompatibleDataBase import AsyncSQLiteDatabase
 import httpx
+import traceback
 
 HEADER = {
     "Host": "be-dev.redrock.cqupt.edu.cn",
