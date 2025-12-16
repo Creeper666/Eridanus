@@ -27,6 +27,23 @@ from framework_common.database_util.ManShuoDrawCompatibleDataBase import AsyncSQ
 import httpx
 import traceback
 
+'''
+上课时间
+第一节 8:00-8:45
+第二节 8:55-9:40
+第三节 10:15-11:00
+第四节 11:10-11:55
+---
+第五节 14:00-14:45
+第六节 14:55-15:40
+第七节 16:15-17:00
+第八节 17:10-17:55
+---
+第九节 19:00-19:45
+第十节 19:55-20:40
+第十一节 20:50-21:35
+第十二节 21:45-22:30
+'''
 HEADER = {
     "Host": "be-dev.redrock.cqupt.edu.cn",
     "Connection": "keep-alive",
@@ -171,7 +188,8 @@ def main(bot: ExtendBot, config):
                 logger.error(f"Binding error: {e}")
                 await bot.send(event, Text(f"绑定出错: {e}"))
         
-        elif text_command in ["今天课表", "明天课表"]:
+        elif text_command in ["今天课表", "明天课表", "后天课表"] or \
+             (text_command.endswith("课表") and text_command[:2] in ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]):
             try:
                 db = await AsyncSQLiteDatabase.get_instance()
                 user_data = await db.read_user(sender_id)
@@ -183,10 +201,29 @@ def main(bot: ExtendBot, config):
                 
                 course_table = cqupt_data.get("course_table")
 
+                today = datetime.date.today()
+                
                 # Determine target date
-                target_date = datetime.date.today()
-                if text_command == "明天课表":
-                    target_date += datetime.timedelta(days=1)
+                if text_command == "今天课表":
+                    target_date = today
+                elif text_command == "明天课表":
+                    target_date = today + datetime.timedelta(days=1)
+                elif text_command == "后天课表":
+                    target_date = today + datetime.timedelta(days=2)
+                else:
+                    # Handle "周X课表"
+                    target_weekday_str = text_command[:2]
+                    weekday_map = {"周一": 0, "周二": 1, "周三": 2, "周四": 3, "周五": 4, "周六": 5, "周日": 6}
+                    target_weekday = weekday_map.get(target_weekday_str)
+                    
+                    if target_weekday is not None:
+                        current_weekday = today.weekday()
+                        # Calculate date of this week's target day
+                        delta = target_weekday - current_weekday
+                        target_date = today + datetime.timedelta(days=delta)
+                    else:
+                        # Should not happen given the if condition
+                        return
                 
                 # Helper to parse date from config
                 def parse_config_date(cfg_date):
@@ -202,12 +239,10 @@ def main(bot: ExtendBot, config):
                 spring_start = parse_config_date(cfg.get("semester_start_spring"))
                 
                 # Determine current semester start
-                # Select the latest start date that is before or equal to target_date
                 candidates = [d for d in [fall_start, spring_start] if d and d <= target_date]
                 if candidates:
                     current_start = max(candidates)
                 else:
-                    # Fallback to the one closest to target_date if both are in future (unlikely) or none valid
                     valid_dates = [d for d in [fall_start, spring_start] if d]
                     if valid_dates:
                         current_start = min(valid_dates, key=lambda x: abs((target_date - x).days))
@@ -216,9 +251,6 @@ def main(bot: ExtendBot, config):
                         return
                 
                 # Calculate week and day
-                # delta.days gives days difference. 
-                # Week 1 starts at day 0. 
-                # If start is Monday: 0-6 is week 1.
                 delta_days = (target_date - current_start).days
                 week = (delta_days // 7) + 1
                 day_idx = target_date.weekday() # 0=Mon, 6=Sun
@@ -230,28 +262,54 @@ def main(bot: ExtendBot, config):
                 
                 # Fetch courses
                 try:
-                    # course_table is [week-1][day_idx]
                     courses = course_table[week-1][day_idx]
                 except IndexError:
                     courses = []
                 
+                week_days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+                
                 if not courses:
-                    await bot.send(event, Text(f"📅 第{week}周 {target_date.strftime('%Y-%m-%d')}\n今天没课，好好休息吧！"))
+                    await bot.send(event, Text(f"📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n今天没课，好好休息吧！"))
                     return
                 
                 # Sort by begin_lesson
                 courses.sort(key=lambda x: x.get("begin_lesson", 0))
                 
+                # Time mapping
+                lesson_time_map = {
+                    1: ("8:00", "8:45"),
+                    2: ("8:55", "9:40"),
+                    3: ("10:15", "11:00"),
+                    4: ("11:10", "11:55"),
+                    5: ("14:00", "14:45"),
+                    6: ("14:55", "15:40"),
+                    7: ("16:15", "17:00"),
+                    8: ("17:10", "17:55"),
+                    9: ("19:00", "19:45"),
+                    10: ("19:55", "20:40"),
+                    11: ("20:50", "21:35"),
+                    12: ("21:45", "22:30")
+                }
+
+                def get_time_range(begin, period):
+                    end_lesson = begin + period - 1
+                    start_time = lesson_time_map.get(begin, ("??:??", "??:??"))[0]
+                    end_time = lesson_time_map.get(end_lesson, ("??:??", "??:??"))[1]
+                    return f"{start_time}-{end_time}"
+
                 # Format message
-                week_days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
                 msg = f"📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n"
                 for c in courses:
+                    begin = c.get("begin_lesson", 1)
+                    period = c.get("period", 2)
+                    time_range = get_time_range(begin, period)
+                    
                     msg += f"----------------\n"
                     msg += f"📖 {c.get('course')}\n"
                     msg += f"📍 {c.get('classroom')}\n"
                     msg += f"👨‍🏫 {c.get('teacher')}\n"
-                    msg += f"⏰ {c.get('lesson')}\n"
-                
+                    msg += f"⏰ {c.get('lesson')} ({time_range})\n"
+                    msg = msg.rstrip("\n")
                 await bot.send(event, Text(msg))
                 
             except Exception as e:
