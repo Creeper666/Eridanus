@@ -1,0 +1,13 @@
+semester_start_fall:         #秋季学期起始时间
+  year: '2023'  #起始年
+  month: '9'    #起始月
+  day: '1'      #起始日
+
+semester_start_spring:         #春季学期起始时间
+  year: '2024'  #起始年
+  month: '2'    #起始月
+  day: '1'      #起始日
+
+login_info:                   #登录信息
+  username: ''      #学号
+  password: ''          #密码
