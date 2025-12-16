@@ -80,10 +80,11 @@ def main(bot: ExtendBot, config):
         headers["Authorization"] = f"Bearer {token}"
         # Use form data as requested: body content stu_num=...
         data = f"stu_num={target_stu_id}"
+        logger.info(f"Get course table request: {data}")
         async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, data=data)
+            response = await client.post(url, headers=headers, content=data)
             # error_msg = traceback.format_exc()
-            logger.info(f"Get course table response: {response.status_code}, {response.text}")
+            # logger.info(f"Get course table response: {response.status_code}, {response.text}")
             response.raise_for_status()
             return response.json()["data"]
 
