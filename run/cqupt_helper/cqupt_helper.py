@@ -152,14 +152,34 @@ def main(bot: ExtendBot, config):
             sender_id = str(event.sender.user_id)
             text_command = event.pure_text.strip()
         
+        # 增加换绑指令
+        if text_command.startswith("课表换绑"):
+            text_command = "课表绑定" + text_command[4:].strip()
+            force_bind = True
+        else:
+            force_bind = False
+
         if text_command.startswith("课表绑定"):
             try:
-                stu_id = text_command[4:]
+                stu_id = text_command[4:].strip()
                 if not stu_id:
                     await bot.send(event, Text("请输入学号，例如：课表绑定2000210091"))
                     return
 
                 db = await AsyncSQLiteDatabase.get_instance()
+                
+                # Check existing binding
+                if not force_bind:
+                    user_data = await db.read_user(sender_id)
+                    existing_cqupt = user_data.get("cqupt", {})
+                    if existing_cqupt and existing_cqupt.get("stu_id"):
+                        old_stu_id = existing_cqupt.get("stu_id")
+                        old_info = existing_cqupt.get("student_info", {})
+                        old_name = old_info.get("name", "未知用户")
+                        
+                        msg = f"已绑定学号：{old_stu_id} ({old_name})\n如需更换绑定，请发送：课表换绑{stu_id}"
+                        await bot.send(event, Text(msg))
+                        return
                 
                 # Check/Get Service Token
                 token_to_use = service_token["token"]
@@ -176,6 +196,10 @@ def main(bot: ExtendBot, config):
                 # Get course table for target student
                 try:
                     raw_table = await get_course_table(token_to_use, stu_id)
+                    if not raw_table:
+                        await bot.send(event, Text("未查询到课表数据，请检查学号是否正确。"))
+                        return
+
                     processed_table = process_course_data(raw_table)
                     
                     # Get student info
@@ -356,14 +380,14 @@ def main(bot: ExtendBot, config):
                 {'type': 'avatar', 'subtype': 'common',
                  'img': [f"https://q1.qlogo.cn/g?b=qq&nk={event.self_id}&s=640"], 'upshift_extra': 15,
                  'content': [f"[name]重邮课表助手[/name]\n[time]随时随地查看课程安排[/time]"]},
-                '你可以通过bot快速查询你的重邮课表安排\n[title]指令菜单：[/title]'
-                '\n以下指令都可以@他人使用'
-                '\n- 绑定学号：课表绑定2020210001    [des]初次使用须绑定，会自动获取姓名班级信息[/des]'
-                '\n- 查询昨天课表：昨天课表'
+                '在这里你可以通过bot快速查询你的重邮课表安排\n[title]指令菜单：[/title]'
+                '\n- 绑定学号：课表绑定202xxxxx \n[des]初次使用必须绑定，会自动获取姓名班级信息[/des]'
+                '\n- 更换绑定：课表换绑202xxxxx \n[des]已绑定用户更换学号时使用[/des]'
                 '\n- 查询今天课表：今天课表'
                 '\n- 查询明天课表：明天课表'
                 '\n- 查询后天课表：后天课表'
                 '\n- 查询本周特定日：周一课表、周二课表...周日课表'
-                '\n[des]数据来源：红岩网校-掌上重邮API[/des]'
+                '\n[title]注意：[/title]绑定只需进行一次，数据会自动保存。'
+                '\n[des]数据来源：Magipoke[/des]'
             ]
             await bot.send(event, Image(file=(await manshuo_draw(draw_json))))
