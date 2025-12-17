@@ -147,14 +147,14 @@ def main(bot: ExtendBot, config):
     @bot.on(GroupMessageEvent)
     async def _(event: GroupMessageEvent):
         if event.message_chain.has(At) and event.message_chain.has(Text):
-            sender_id, text_command = event.message_chain.get(At)[0].qq, event.message_chain.get(Text)[0].text
+            sender_id, text_command = event.message_chain.get(At)[0].qq, event.message_chain.get(Text)[0].text.strip()
         else :
             sender_id = str(event.sender.user_id)
-            text_command = event.pure_text
+            text_command = event.pure_text.strip()
         
         if text_command.startswith("课表绑定"):
             try:
-                stu_id = text_command[4:].strip()
+                stu_id = text_command[4:]
                 if not stu_id:
                     await bot.send(event, Text("请输入学号，例如：课表绑定2000210091"))
                     return
@@ -194,7 +194,7 @@ def main(bot: ExtendBot, config):
                     }
                     await db.write_user(sender_id, data)
                     
-                    msg = f"@{sender_id} 学号 {stu_id} 课表绑定成功！"
+                    msg = f"学号 {stu_id} 课表绑定成功！"
                     if student_info:
                         msg += f"\n姓名: {student_info.get('name')}"
                         msg += f"\n专业: {student_info.get('major')}"
