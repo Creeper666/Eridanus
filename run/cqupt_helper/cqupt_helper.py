@@ -108,6 +108,20 @@ def main(bot: ExtendBot, config):
             response.raise_for_status()
             return response.json()["data"]
 
+    async def get_student_info(token: str, target_stu_id: str):
+        url = f"https://be-dev.redrock.cqupt.edu.cn/magipoke-jwzx/search/people?stu={target_stu_id}"
+        headers = HEADER.copy()
+        headers["Authorization"] = f"Bearer {token}"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            logger.info(f"Get student info response: {response.status_code}, {response.text}")
+            response.raise_for_status()
+            res_json = response.json()
+            if res_json.get("status") == 10000 and res_json.get("data"):
+                return res_json["data"][0]
+            return None
+
     def process_course_data(raw_data):
         # 20 weeks, 7 days (Mon=0 to Sun=6)
         # Week 1 maps to index 0
@@ -165,6 +179,9 @@ def main(bot: ExtendBot, config):
                     raw_table = await get_course_table(token_to_use, stu_id)
                     processed_table = process_course_data(raw_table)
                     
+                    # Get student info
+                    student_info = await get_student_info(token_to_use, stu_id)
+                    
                     # Save to DB (Store token too, though it's the service token)
                     data = {
                         "cqupt": {
@@ -172,12 +189,19 @@ def main(bot: ExtendBot, config):
                             "password": default_password,
                             "token": token_to_use,
                             "course_table": processed_table,
+                            "student_info": student_info,
                             "updated_at": datetime.datetime.now().isoformat()
                         }
                     }
                     await db.write_user(sender_id, data)
                     
-                    await bot.send(event, Text(f"学号 {stu_id} 课表绑定成功！"))
+                    msg = f"学号 {stu_id} 课表绑定成功！"
+                    if student_info:
+                        msg += f"\n姓名: {student_info.get('name')}"
+                        msg += f"\n专业: {student_info.get('major')}"
+                        msg += f"\n班级: {student_info.get('classnum')}"
+                    
+                    await bot.send(event, Text(msg))
                     
                 except Exception as e:
                     error_msg = traceback.format_exc()
