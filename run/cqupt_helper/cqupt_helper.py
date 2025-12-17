@@ -356,13 +356,14 @@ def main(bot: ExtendBot, config):
                 {'type': 'avatar', 'subtype': 'common',
                  'img': [f"https://q1.qlogo.cn/g?b=qq&nk={event.self_id}&s=640"], 'upshift_extra': 15,
                  'content': [f"[name]重邮课表助手[/name]\n[time]随时随地查看课程安排[/time]"]},
-                '在这里你可以通过bot快速查询你的重邮课表安排\n[title]指令菜单：[/title]'
-                '\n- 绑定学号：课表绑定202xxxxx \n[des]初次使用必须绑定，会自动获取姓名班级信息[/des]'
+                '你可以通过bot快速查询你的重邮课表安排\n[title]指令菜单：[/title]'
+                '\n以下指令都可以@他人使用'
+                '\n- 绑定学号：课表绑定2020210001    [des]初次使用须绑定，会自动获取姓名班级信息[/des]'
+                '\n- 查询昨天课表：昨天课表'
                 '\n- 查询今天课表：今天课表'
                 '\n- 查询明天课表：明天课表'
                 '\n- 查询后天课表：后天课表'
                 '\n- 查询本周特定日：周一课表、周二课表...周日课表'
-                '\n[title]注意：[/title]绑定只需进行一次，数据会自动保存。'
-                '\n[des]数据来源：Magipoke[/des]'
+                '\n[des]数据来源：红岩网校-掌上重邮API[/des]'
             ]
             await bot.send(event, Image(file=(await manshuo_draw(draw_json))))
