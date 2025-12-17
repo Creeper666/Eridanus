@@ -150,8 +150,11 @@ def main(bot: ExtendBot, config):
     
     @bot.on(GroupMessageEvent)
     async def _(event: GroupMessageEvent):
-        text_command = event.pure_text
-        sender_id = str(event.sender.user_id)
+        if event.message_chain.has(At) and event.message_chain.has(Text):
+            sender_id, text_command = event.message_chain.get(At)[0].qq, event.message_chain.get(Text)[0].text
+        else :
+            sender_id = str(event.sender.user_id)
+            text_command = event.pure_text
         
         if text_command.startswith("课表绑定"):
             try:
@@ -195,7 +198,7 @@ def main(bot: ExtendBot, config):
                     }
                     await db.write_user(sender_id, data)
                     
-                    msg = f"学号 {stu_id} 课表绑定成功！"
+                    msg = f"@{sender_id} 学号 {stu_id} 课表绑定成功！"
                     if student_info:
                         msg += f"\n姓名: {student_info.get('name')}"
                         msg += f"\n专业: {student_info.get('major')}"
@@ -228,7 +231,9 @@ def main(bot: ExtendBot, config):
                 today = datetime.date.today()
                 
                 # Determine target date
-                if text_command == "今天课表":
+                if text_command=="昨天课表":
+                    target_date = today - datetime.timedelta(days=1)
+                elif text_command == "今天课表":
                     target_date = today
                 elif text_command == "明天课表":
                     target_date = today + datetime.timedelta(days=1)
@@ -322,7 +327,15 @@ def main(bot: ExtendBot, config):
                     return f"{start_time}-{end_time}"
 
                 # Format message
-                msg = f"📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n"
+                stu_id = cqupt_data.get("stu_id", "")
+                student_info = cqupt_data.get("student_info", {})
+                name = student_info.get("name", "") if student_info else ""
+                
+                header_info = ""
+                if name or stu_id:
+                    header_info = f"{name} {stu_id}\n"
+
+                msg = f"{header_info}📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n"
                 for c in courses:
                     begin = c.get("begin_lesson", 1)
                     period = c.get("period", 2)
