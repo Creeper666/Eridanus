@@ -211,7 +211,7 @@ def main(bot: ExtendBot, config):
                 logger.error(f"Binding error: {e}")
                 await bot.send(event, Text(f"绑定出错: {e}"))
         
-        elif text_command in ["今天课表", "明天课表", "后天课表"] or \
+        elif text_command in ["昨天课表","今天课表", "明天课表", "后天课表"] or \
              (text_command.endswith("课表") and text_command[:2] in ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]):
             try:
                 db = await AsyncSQLiteDatabase.get_instance()
@@ -228,7 +228,7 @@ def main(bot: ExtendBot, config):
                 
                 # Determine target date
                 if text_command=="昨天课表":
-                    logger.info(f"Query course for {sender_id} on {today - datetime.timedelta(days=1)}")
+                    # logger.info(f"Query course for {sender_id} on {today - datetime.timedelta(days=1)}")
                     target_date = today - datetime.timedelta(days=1)
                 elif text_command == "今天课表":
                     target_date = today
@@ -349,3 +349,20 @@ def main(bot: ExtendBot, config):
             except Exception as e:
                 logger.error(f"Query course error: {e}")
                 await bot.send(event, Text(f"查询出错: {e}"))
+
+        elif text_command == "课表帮助":
+            draw_json = [
+                {'type': 'basic_set', 'img_name_save': 'cqupt_course_help.png'},
+                {'type': 'avatar', 'subtype': 'common',
+                 'img': [f"https://q1.qlogo.cn/g?b=qq&nk={event.self_id}&s=640"], 'upshift_extra': 15,
+                 'content': [f"[name]重邮课表助手[/name]\n[time]随时随地查看课程安排[/time]"]},
+                '在这里你可以通过bot快速查询你的重邮课表安排\n[title]指令菜单：[/title]'
+                '\n- 绑定学号：课表绑定202xxxxx \n[des]初次使用必须绑定，会自动获取姓名班级信息[/des]'
+                '\n- 查询今天课表：今天课表'
+                '\n- 查询明天课表：明天课表'
+                '\n- 查询后天课表：后天课表'
+                '\n- 查询本周特定日：周一课表、周二课表...周日课表'
+                '\n[title]注意：[/title]绑定只需进行一次，数据会自动保存。'
+                '\n[des]数据来源：Magipoke[/des]'
+            ]
+            await bot.send(event, Image(file=(await manshuo_draw(draw_json))))
