@@ -3,7 +3,7 @@ import datetime
 from asyncio import sleep
 
 from developTools.event.events import GroupMessageEvent
-from developTools.message.message_components import Text, At
+from developTools.message.message_components import Text, At, Image
 from framework_common.database_util.User import get_users_with_permission_above, get_user
 from framework_common.database_util.llmDB import delete_user_history
 from framework_common.framework_util.websocket_fix import ExtendBot
