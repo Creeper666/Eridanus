@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
 import datetime
-import random
 from asyncio import sleep
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
-import asyncio
-from developTools.event.events import GroupMessageEvent, LifecycleMetaEvent
-from developTools.message.message_components import Image, Text, Card
+from developTools.event.events import GroupMessageEvent
+from developTools.message.message_components import Text, At
 from framework_common.database_util.User import get_users_with_permission_above, get_user
 from framework_common.database_util.llmDB import delete_user_history
 from framework_common.framework_util.websocket_fix import ExtendBot
