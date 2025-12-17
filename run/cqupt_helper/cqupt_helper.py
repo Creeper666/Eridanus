@@ -247,7 +247,7 @@ def main(bot: ExtendBot, config):
                         delta = target_weekday - current_weekday
                         target_date = today + datetime.timedelta(days=delta)
                     else:
-                        # Should not happen given the if condition
+                        await bot.send(event, Text(f"未知的周{target_weekday_str}课表，请检查输入。"))
                         return
                 
                 # Helper to parse date from config
@@ -282,7 +282,7 @@ def main(bot: ExtendBot, config):
                 
                 # Week validation
                 if week < 1 or week > 20:
-                    await bot.send(event, Text(f"当前是第{week}周，不在学期课程安排范围内（1-20周）。"))
+                    await bot.send(event, [At(sender_id), Text(f"当前是第{week}周，不在学期课程安排范围内（1-20周）。")])
                     return
                 
                 # Fetch courses
@@ -294,7 +294,7 @@ def main(bot: ExtendBot, config):
                 week_days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
                 
                 if not courses:
-                    await bot.send(event, Text(f"📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n今天没课，好好休息吧！"))
+                    await bot.send(event, [At(sender_id), Text(f"📅 第{week}周 {week_days[day_idx]} ({target_date.strftime('%m-%d')})\n今天没课，好好休息吧！")])
                     return
                 
                 # Sort by begin_lesson
