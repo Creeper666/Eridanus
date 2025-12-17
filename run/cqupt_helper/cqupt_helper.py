@@ -228,6 +228,7 @@ def main(bot: ExtendBot, config):
                 
                 # Determine target date
                 if text_command=="昨天课表":
+                    logger.info(f"Query course for {sender_id} on {today - datetime.timedelta(days=1)}")
                     target_date = today - datetime.timedelta(days=1)
                 elif text_command == "今天课表":
                     target_date = today
@@ -343,7 +344,7 @@ def main(bot: ExtendBot, config):
                     msg += f"👨‍🏫 {c.get('teacher')}\n"
                     msg += f"⏰ {c.get('lesson')} ({time_range})\n"
                 msg = msg.rstrip("\n")
-                await bot.send(event, Text(msg))
+                await bot.send(event, [At(qq=sender_id), Text(msg)])
                 
             except Exception as e:
                 logger.error(f"Query course error: {e}")
