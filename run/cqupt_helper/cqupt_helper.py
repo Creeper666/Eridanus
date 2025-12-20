@@ -157,10 +157,20 @@ class YKTManager:
     async def ensure_login(self):
         if not self.token_id:
             return await self.login()
+        
+        # Check token validity using a lightweight request (e.g. get buildings)
+        # We need to manually construct this request to avoid infinite recursion
+        # since generic_request calls ensure_login.
+        test_res = await self.generic_request("getElectricityBuilding", {"TYPE": "1"}, need_token=True, check_login=False)
+        if test_res is None:
+            self.token_id = None
+            return await self.login()
+        
         return True
 
-    async def generic_request(self, service_type, extra_params, need_token=True):
-        if not await self.ensure_login(): return None
+    async def generic_request(self, service_type, extra_params, need_token=True, check_login=True):
+        if check_login:
+            if not await self.ensure_login(): return None
         
         url = f"{YKT_BASE_URL}/appEntrance!gateWay.action"
         params = {
@@ -208,13 +218,7 @@ class YKTManager:
         })
 
     async def query_electricity_by_room(self, all_room_no):
-        # If token expired, this might return None. Logic could be improved to retry.
-        res = await self.generic_request("queryRoomEleByAllroomno", {"ALLROOMNO": str(all_room_no)})
-        if res is None:
-            # Retry once
-            self.token_id = None
-            res = await self.generic_request("queryRoomEleByAllroomno", {"ALLROOMNO": str(all_room_no)})
-        return res
+        return await self.generic_request("queryRoomEleByAllroomno", {"ALLROOMNO": str(all_room_no)})
 
 '''
 上课时间
