@@ -689,10 +689,10 @@ def main(bot: ExtendBot, config):
                      return
 
                 msg = f"🏠 寝室：{room_name}\n"
-                msg += f"本月用量：{res.get("amount")}\n"
+                msg += f"本月用量：{res.get('amount')}\n"
                 msg += f"本月费用：{res.get('totalValue')}\n"
-                msg += f"💰 余额：{res.get("blanceValue")} 元\n"
-                msg += f"🕒 更新：{res.get("recordTime")}"
+                msg += f"💰 余额：{res.get('blanceValue')} 元\n"
+                msg += f"🕒 更新：{res.get('recordTime')}"
                 
                 await bot.send(event, [At(qq=sender_id), Text("\n" + msg)])
                 
