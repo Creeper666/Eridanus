@@ -9,5 +9,13 @@ semester_start_spring:         #春季学期起始时间
   day: '1'      #起始日
 
 login_info:                   #登录信息
-  username: ''      #学号
+  username: ''          #学号
   password: ''          #密码
+
+ykt_login_info:                   #电费查询登录信息
+  username: ''          #统一认证号码
+  password: ''          #6位数密码
+
+white_list:              #白名单配置
+  enable: true           #是否开启白名单
+  group_ids: []          #白名单群ID列表

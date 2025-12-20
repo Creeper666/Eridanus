@@ -22,6 +22,199 @@ from run.system_plugin.func_collection import trigger_tasks
 from framework_common.database_util.ManShuoDrawCompatibleDataBase import AsyncSQLiteDatabase
 import httpx
 import traceback
+import time
+import hashlib
+import base64
+import json
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+from urllib.parse import quote
+
+# --- YKT Crypto & Config ---
+YKT_BASE_URL = "http://202.202.43.47:8080/ZNCard-Access"
+YKT_DEFAULT_KEY = "lyy4pGK2Iw0XtQPq"
+YKT_MC_KEY = "gQCob9ZNJ7k0WUjr"
+YKT_DEVICE_ID = "41A0A3958BC13A7D13A473B4EF575F13"
+
+class CryptoUtils:
+    @staticmethod
+    def aes_encrypt(text, key_str):
+        key = key_str.encode('utf-8')
+        cipher = AES.new(key, AES.MODE_ECB)
+        padded_text = pad(text.encode('utf-8'), AES.block_size)
+        encrypted = cipher.encrypt(padded_text)
+        return base64.b64encode(encrypted).decode('utf-8')
+
+    @staticmethod
+    def aes_decrypt(text_base64, key_str):
+        try:
+            key = key_str.encode('utf-8')
+            cipher = AES.new(key, AES.MODE_ECB)
+            encrypted = base64.b64decode(text_base64)
+            decrypted = unpad(cipher.decrypt(encrypted), AES.block_size)
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            return None
+
+    @staticmethod
+    def encrypt_sub16(input_str):
+        encrypted = CryptoUtils.aes_encrypt(input_str, YKT_DEFAULT_KEY)
+        if len(encrypted) > 16:
+            return encrypted[:16]
+        else:
+            return encrypted.ljust(16, 'F')
+
+    @staticmethod
+    def tans_params(params):
+        result = ""
+        for key in params:
+            val = params[key]
+            if val is not None:
+                encoded_key = quote(str(key))
+                encoded_val = quote(str(val))
+                result += f"{encoded_key}={encoded_val}&"
+        return result
+
+    @staticmethod
+    def generate_mac(params):
+        items = []
+        for key in params:
+            val = params[key]
+            if val is not None:
+                encoded_key = quote(str(key))
+                encoded_val = quote(str(val))
+                items.append(f"{encoded_key}={encoded_val}")
+        items.append(f"MCKEY={YKT_MC_KEY}")
+        items.sort()
+        final_str = "".join(items)
+        m = hashlib.md5()
+        m.update(final_str.encode('utf-8'))
+        return m.hexdigest().upper()
+
+class YKTManager:
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+        self.client = httpx.AsyncClient(headers={
+            "User-Agent": "Mozilla/5.0 (Linux; Android 16; 2311DRK48C Build/BP2A.250605.031.A3; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/143.0.7499.34 Mobile Safari/537.36 uni-app Html5Plus/1.0 (Immersed/41.37931)",
+            "Content-Type": "application/x-www-form-urlencoded"
+        })
+        self.uuid = None
+        self.token_id = None
+        self.user_id = None
+        self.emp_id = None
+        self.e_account_id = None
+
+    async def get_new_id(self):
+        url = f"{YKT_BASE_URL}/appEntrance!newid.action"
+        payload = {"TIMESTAMP": int(time.time() * 1000)}
+        try:
+            resp = await self.client.post(url, json=payload, headers={"Content-Type": "application/json"})
+            data = resp.json()
+            if data and data[0]['IS_SUCCESS'] == 'T':
+                self.uuid = data[0]['DATA']
+                return True
+        except:
+            pass
+        return False
+
+    async def login(self):
+        if not self.uuid:
+            if not await self.get_new_id(): return False
+
+        url = f"{YKT_BASE_URL}/appEntrance!gateWay.action"
+        params = {
+            "SERVICE_TYPE": "appLoginUser",
+            "USERNO": self.username,
+            "PASSWORD": self.password,
+            "DEVICEID": YKT_DEVICE_ID,
+            "TIMESTAMP": str(int(time.time() * 1000)),
+            "LOGINTYPE": "false"
+        }
+        params["MAC"] = CryptoUtils.generate_mac(params)
+        param_str = CryptoUtils.tans_params(params)
+        dynamic_key = CryptoUtils.encrypt_sub16(self.uuid)
+        encrypted_info = CryptoUtils.aes_encrypt(param_str, dynamic_key)
+        
+        payload = {"INFO": encrypted_info}
+        try:
+            resp = await self.client.post(url, data=payload)
+            json_resp = resp.json()
+            if json_resp and json_resp[0]['IS_SUCCESS'] == 'T':
+                decrypted_data = CryptoUtils.aes_decrypt(json_resp[0]['DATA'], YKT_DEFAULT_KEY)
+                if decrypted_data:
+                    result = json.loads(decrypted_data)
+                    if result['status'] == 0:
+                        self.token_id = result['item']['tokenId']
+                        self.user_id = result['item']['userid']
+                        self.emp_id = result['item']['empvo']['empId']
+                        self.e_account_id = result['item']['empvo']['eAccountId']
+                        return True
+        except:
+            pass
+        return False
+
+    async def ensure_login(self):
+        if not self.token_id:
+            return await self.login()
+        return True
+
+    async def generic_request(self, service_type, extra_params, need_token=True):
+        if not await self.ensure_login(): return None
+        
+        url = f"{YKT_BASE_URL}/appEntrance!gateWay.action"
+        params = {
+            "SERVICE_TYPE": service_type,
+            "TIMESTAMP": str(int(time.time() * 1000)),
+            "USERID": str(self.user_id),
+            "EMPID": str(self.emp_id),
+            **extra_params
+        }
+        if need_token:
+            params["TOKEN"] = self.token_id
+            
+        params["MAC"] = CryptoUtils.generate_mac(params)
+        if need_token: del params["TOKEN"]
+        
+        param_str = CryptoUtils.tans_params(params)
+        dynamic_key = CryptoUtils.encrypt_sub16(self.token_id)
+        encrypted_info = CryptoUtils.aes_encrypt(param_str, dynamic_key)
+        
+        payload = {"INFO": encrypted_info, "USID": self.user_id}
+        
+        try:
+            resp = await self.client.post(url, data=payload)
+            json_resp = resp.json()
+            if json_resp and json_resp[0]['IS_SUCCESS'] == 'T':
+                decrypted_data = CryptoUtils.aes_decrypt(json_resp[0]['DATA'], YKT_DEFAULT_KEY)
+                if decrypted_data:
+                    result = json.loads(decrypted_data)
+                    if result['status'] == 0:
+                        return result['item']
+        except:
+            pass
+        return None
+
+    async def get_electricity_buildings(self):
+        return await self.generic_request("getElectricityBuilding", {"TYPE": "1"})
+
+    async def get_electricity_floors(self, build_no):
+        return await self.generic_request("getElectricityFloor", {"BUILDNO": str(build_no)})
+
+    async def get_electricity_rooms(self, build_no, floor_no):
+        return await self.generic_request("getElectricityRoom", {
+            "ARCHITECTUREID": str(build_no),
+            "FLOOR": str(floor_no)
+        })
+
+    async def query_electricity_by_room(self, all_room_no):
+        # If token expired, this might return None. Logic could be improved to retry.
+        res = await self.generic_request("queryRoomEleByAllroomno", {"ALLROOMNO": str(all_room_no)})
+        if res is None:
+            # Retry once
+            self.token_id = None
+            res = await self.generic_request("queryRoomEleByAllroomno", {"ALLROOMNO": str(all_room_no)})
+        return res
 
 '''
 上课时间
@@ -61,6 +254,11 @@ def main(bot: ExtendBot, config):
 
     # Global token cache
     service_token = {"token": None}
+    
+    # YKT Manager
+    ykt_username = config.cqupt_helper.config.get("ykt_login_info", {}).get("username", default_username)
+    ykt_password = config.cqupt_helper.config.get("ykt_login_info", {}).get("password", default_password)
+    ykt_manager = YKTManager(ykt_username, ykt_password)
 
     async def check_token(token: str) -> bool:
         if not token: return False
@@ -146,6 +344,12 @@ def main(bot: ExtendBot, config):
     
     @bot.on(GroupMessageEvent)
     async def _(event: GroupMessageEvent):
+        # White List Check
+        white_list_cfg = config.cqupt_helper.config.get("white_list", {})
+        if white_list_cfg.get("enable", True):
+            if event.group_id not in white_list_cfg.get("group_ids", []):
+                return
+
         if event.message_chain.has(At) and event.message_chain.has(Text):
             sender_id, text_command = event.message_chain.get(At)[0].qq, event.message_chain.get(Text)[0].text.strip()
         else :
@@ -374,20 +578,145 @@ def main(bot: ExtendBot, config):
                 logger.error(f"Query course error: {e}")
                 await bot.send(event, Text(f"查询出错: {e}"))
 
-        elif text_command == "课表帮助":
+        elif text_command.startswith("电费绑定"):
+            try:
+                room_str_full = text_command[4:].strip()
+                if "舍" not in room_str_full:
+                    await bot.send(event, Text("格式错误，请包含'舍'"))
+                    return
+                
+                parts = room_str_full.split("舍")
+                if len(parts) < 2:
+                     await bot.send(event, Text("格式错误，无法解析"))
+                     return
+                
+                building_part = parts[0] + "舍"
+                room_num_part = parts[1]
+                
+                if len(room_num_part) < 2:
+                     await bot.send(event, Text("房间号格式错误"))
+                     return
+                     
+                floor_raw = room_num_part[:-2]
+                if not floor_raw:
+                     await bot.send(event, Text("房间号格式错误，无法解析楼层"))
+                     return
+
+                if len(floor_raw) == 1:
+                    floor_str = "0" + floor_raw
+                else:
+                    floor_str = floor_raw
+                
+                # await bot.send(event, Text("正在连接电费系统..."))
+                
+                if not await ykt_manager.ensure_login():
+                     await bot.send(event, Text("电费系统登录失败，请联系管理员"))
+                     return
+
+                buildings = await ykt_manager.get_electricity_buildings()
+                if not buildings:
+                     await bot.send(event, Text("无法获取楼栋列表"))
+                     return
+                
+                target_build_no = None
+                for b in buildings:
+                    if b['BUILDNAME'] == building_part:
+                        target_build_no = b['BUILDNO']
+                        break
+                
+                if not target_build_no:
+                     await bot.send(event, Text(f"未找到楼栋：{building_part}"))
+                     return
+                
+                rooms = await ykt_manager.get_electricity_rooms(target_build_no, floor_str)
+                if not rooms:
+                     await bot.send(event, Text(f"未找到该楼层房间信息 (楼栋:{target_build_no}, 楼层:{floor_str})"))
+                     return
+                
+                target_room = None
+                for r in rooms:
+                    if r.get('CYROOMNO') == room_num_part:
+                        target_room = r
+                        break
+                
+                if not target_room:
+                     await bot.send(event, Text(f"未找到房间：{room_num_part}"))
+                     return
+                
+                all_room_no = target_room['ALLROOMNO']
+                room_name = f"{building_part}{room_num_part}"
+                
+                db = await AsyncSQLiteDatabase.get_instance()
+                user_data = await db.read_user(sender_id)
+                if not user_data: user_data = {}
+                cqupt_data = user_data.get("cqupt", {})
+                
+                cqupt_data["electricity"] = {
+                    "all_room_no": all_room_no,
+                    "room_name": room_name,
+                    "bind_at": datetime.datetime.now().isoformat()
+                }
+                user_data["cqupt"] = cqupt_data
+                await db.write_user(sender_id, user_data)
+                
+                await bot.send(event, Text(f"电费绑定成功！\n已绑定：{room_name}"))
+                
+            except Exception as e:
+                logger.error(f"Ele binding error: {e}")
+                await bot.send(event, Text(f"绑定出错: {e}"))
+
+        elif text_command == "电费查询":
+            try:
+                db = await AsyncSQLiteDatabase.get_instance()
+                user_data = await db.read_user(sender_id)
+                cqupt_data = user_data.get("cqupt", {})
+                ele_data = cqupt_data.get("electricity")
+                
+                if not ele_data:
+                    await bot.send(event, Text("请先绑定寝室！详见：重邮帮助"))
+                    return
+                
+                all_room_no = ele_data.get("all_room_no")
+                room_name = ele_data.get("room_name")
+                
+                if not await ykt_manager.ensure_login():
+                     await bot.send(event, Text("电费系统登录失败，请联系管理员"))
+                     return
+                
+                res = await ykt_manager.query_electricity_by_room(all_room_no)
+                if not res:
+                     await bot.send(event, Text("查询失败，未获取到数据"))
+                     return
+
+                msg = f"🏠 寝室：{room_name}\n"
+                msg += f"本月用量：{res.get("amount")}\n"
+                msg += f"本月费用：{res.get('totalValue')}\n"
+                msg += f"💰 余额：{res.get("blanceValue")} 元\n"
+                msg += f"🕒 更新：{res.get("recordTime")}"
+                
+                await bot.send(event, [At(qq=sender_id), Text("\n" + msg)])
+                
+            except Exception as e:
+                logger.error(f"Ele query error: {e}")
+                await bot.send(event, Text(f"查询出错: {e}"))
+
+        elif text_command == "重邮帮助":
             draw_json = [
                 {'type': 'basic_set', 'img_name_save': 'cqupt_course_help.png'},
                 {'type': 'avatar', 'subtype': 'common',
                  'img': [f"https://q1.qlogo.cn/g?b=qq&nk={event.self_id}&s=640"], 'upshift_extra': 15,
-                 'content': [f"[name]重邮课表助手[/name]\n[time]随时随地查看课程安排[/time]"]},
-                '在这里你可以通过bot快速查询你的重邮课表安排。所有指令都可以@他人使用。\n[title]指令菜单：[/title]'
+                 'content': [f"[name]重邮助手[/name]\n[time]随时随地查看课程安排与查询电费[/time]"]},
+                '在这里你可以通过bot快速查询你的重邮课表安排。所有指令，@谁，查询/绑定的对象就是谁。查询/绑定自己的不需要@。\n[title]指令菜单：[/title]'
                 '\n- 绑定学号：课表绑定202xxxxx \n[des]初次使用必须绑定，会自动获取姓名班级信息[/des]'
                 '\n- 更换绑定：课表换绑202xxxxx \n[des]已绑定用户更换学号时使用[/des]'
+                '\n- 查询昨天课表：昨天课表'
                 '\n- 查询今天课表：今天课表'
                 '\n- 查询明天课表：明天课表'
                 '\n- 查询后天课表：后天课表'
                 '\n- 查询本周特定日：周一课表、周二课表...周日课表'
+                '\n- 电费绑定寝室：电费绑定 兴业1舍101'
+                '\n- 电费查询：电费查询'
                 '\n[title]注意：[/title]绑定只需进行一次，数据会自动保存。'
-                '\n[des]数据来源：红岩网校-掌上重邮API[/des]'
+                '\n[des]数据来源：红岩网校-掌上重邮API；重邮一卡通APP[/des]'
             ]
             await bot.send(event, Image(file=(await manshuo_draw(draw_json))))
