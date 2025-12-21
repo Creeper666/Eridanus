@@ -119,8 +119,7 @@ class YKTManager:
         return False
 
     async def login(self):
-        if not self.uuid:
-            if not await self.get_new_id(): return False
+        if not await self.get_new_id(): return False
 
         url = f"{YKT_BASE_URL}/appEntrance!gateWay.action"
         params = {
