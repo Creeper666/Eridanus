@@ -17,8 +17,8 @@ GIT_PATH = CUSTOM_GIT_PATH if os.path.exists(CUSTOM_GIT_PATH) else "git"
 
 # 鉴权配置
 AUTH_DURATION = 720000
-IP_WHITELIST = [] # ["127.0.0.1", "::1"]
-
+IP_WHITELIST = ["127.0.0.1","192.168.195.128","192.168.195.137","::1"] # ["127.0.0.1", "::1"]
+# IP_WHITELIST = []
 # YAML 解析器初始化
 yaml = YAML()
 yaml.preserve_quotes = True

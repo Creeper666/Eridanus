@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -10,6 +10,29 @@ from .utils.logger import get_logger
 logger = get_logger()
 
 app = FastAPI(title="Eridanus WebUI", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+# 自定义 HTTPException 处理器
+# 这允许我们在 raise HTTPException(detail=...) 时传递字典，并将其作为扁平的 JSON 返回
+# 或者统一错误响应格式
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    # 如果 detail 是字典，直接作为响应内容（扁平化）
+    if isinstance(exc.detail, dict):
+        content = exc.detail
+        # 确保有 code 字段，如果没有则使用 status_code
+        if "code" not in content:
+            content["code"] = exc.status_code
+        if "message" not in content:
+            content["message"] = "Error"
+    else:
+        # 如果是字符串，包装成标准格式
+        content = {"code": exc.status_code, "message": exc.detail}
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=content,
+        headers=exc.headers
+    )
 
 # CORS 配置
 app.add_middleware(

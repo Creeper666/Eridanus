@@ -15,10 +15,23 @@ async def verify_auth(request: Request):
     # 检查 cookie
     auth_token = request.cookies.get("auth_token")
     if not auth_token:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        # 使用字典作为 detail，配合 main.py 中的自定义处理器
+        raise HTTPException(
+            status_code=401, 
+            detail={
+                "error": "Unauthorized",
+                "reason": "Missing auth token"
+            }
+        )
     
     expire_time = auth_info.get(auth_token)
     if not expire_time or expire_time < int(time.time()):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(
+            status_code=401, 
+            detail={
+                "error": "Unauthorized",
+                "reason": "Token expired or invalid"
+            }
+        )
     
     return True
