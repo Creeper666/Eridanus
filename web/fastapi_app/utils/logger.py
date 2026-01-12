@@ -1,0 +1,242 @@
+import logging
+import os
+from datetime import datetime
+from logging import Logger
+import threading
+import colorlog
+
+# 全局变量，用于存储 logger 实例和屏蔽的日志类别
+_logger = None
+_blocked_loggers = ["INFO_MSG", "DEBUG"]  # 默认禁用DEBUG
+_lock = threading.Lock()  # 添加线程锁
+_current_log_date = None
+
+# 获取当前文件的上级目录（utils），再上级（fastapi_app），再上级（web），再上级（根目录）
+# 假设根目录下的 log 文件夹
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LOG_FOLDER = os.path.join(BASE_DIR, "..", "log")
+
+
+class CategoryHandler(logging.StreamHandler):
+    """自定义Handler，根据消息类型使用不同的formatter"""
+
+    def __init__(self):
+        super().__init__()
+        # 为不同类别创建不同的formatter
+        self.formatters = {
+            'default': self._create_formatter(
+                '%(log_color)s%(asctime)s [%(name)s] - %(levelname)s - [bot] %(message)s',
+                {'DEBUG': 'white', 'INFO': 'cyan', 'WARNING': 'yellow', 'ERROR': 'red', 'CRITICAL': 'bold_red'}
+            ),
+            'msg': self._create_formatter(
+                '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - [MSG] %(message)s',
+                {'DEBUG': 'white', 'INFO': 'green', 'WARNING': 'yellow', 'ERROR': 'red', 'CRITICAL': 'bold_red'}
+            ),
+            'func': self._create_formatter(
+                '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - [FUNC] %(message)s',
+                {'DEBUG': 'white', 'INFO': 'blue', 'WARNING': 'yellow', 'ERROR': 'red', 'CRITICAL': 'bold_red'}
+            ),
+            'server': self._create_formatter(
+                '%(log_color)s%(asctime)s - %(name)s - %(levelname)s - [SERVER] %(message)s',
+                {'DEBUG': 'white', 'INFO': 'purple', 'WARNING': 'yellow', 'ERROR': 'red', 'CRITICAL': 'bold_red'}
+            )
+        }
+        # 设置默认formatter
+        self.setFormatter(self.formatters['default'])
+
+    def _create_formatter(self, format_str, colors):
+        return colorlog.ColoredFormatter(format_str, log_colors=colors)
+
+    def emit(self, record):
+        # 根据record中的category属性选择合适的formatter
+        category = getattr(record, 'category', 'default')
+        formatter = self.formatters.get(category, self.formatters['default'])
+
+        # 使用线程锁确保formatter切换的原子性
+        with _lock:
+            original_formatter = self.formatter
+            self.setFormatter(formatter)
+            try:
+                super().emit(record)
+            finally:
+                self.setFormatter(original_formatter)
+
+
+def createLogger(blocked_loggers=None):
+    global _logger, _blocked_loggers, _current_log_date
+    if blocked_loggers is not None:
+        _blocked_loggers = blocked_loggers
+
+    # 确保日志文件夹存在
+    if not os.path.exists(LOG_FOLDER):
+        os.makedirs(LOG_FOLDER)
+
+    # 创建一个 logger 对象
+    logger = logging.getLogger("Eridanus")
+    logger.setLevel(logging.INFO)  # 设置为INFO级别，禁用DEBUG
+    logger.propagate = False  # 防止重复日志
+
+    # 清除已有的handlers，避免重复添加
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
+    # 自定义过滤器，用于屏蔽指定的日志类别
+    class BlockLoggerFilter(logging.Filter):
+        def filter(self, record):
+            if record.levelname in _blocked_loggers:
+                return False
+            # 检查自定义的category屏蔽
+            category = getattr(record, 'category', None)
+            if category and f"INFO_{category.upper()}" in _blocked_loggers:
+                return False
+            return True
+
+    # 使用自定义的CategoryHandler
+    console_handler = CategoryHandler()
+    console_handler.addFilter(BlockLoggerFilter())
+    logger.addHandler(console_handler)
+
+    # 设置文件日志格式
+    file_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    file_formatter = logging.Formatter(file_format)
+
+    # 获取当前日期
+    _current_log_date = datetime.now().strftime("%Y-%m-%d")
+    log_file_path = os.path.join(LOG_FOLDER, f"{_current_log_date}.log")
+
+    # 创建文件处理器
+    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
+    file_handler.setFormatter(file_formatter)
+    file_handler.addFilter(BlockLoggerFilter())
+    logger.addHandler(file_handler)
+
+    # 将文件处理器存储到logger对象上，方便后续访问
+    logger._file_handler = file_handler
+    logger._log_folder = LOG_FOLDER
+    logger._file_formatter = file_formatter
+    logger._block_filter = BlockLoggerFilter()
+
+    # 定义一个函数来更新日志文件（按日期切换）
+    def update_log_file():
+        global _current_log_date
+        new_date = datetime.now().strftime("%Y-%m-%d")
+        if new_date != _current_log_date:
+            old_date = _current_log_date
+            new_log_file_path = os.path.join(logger._log_folder, f"{new_date}.log")
+
+            # 移除旧的文件处理器
+            logger.removeHandler(logger._file_handler)
+            logger._file_handler.close()
+
+            # 创建新的文件处理器
+            logger._file_handler = logging.FileHandler(new_log_file_path, mode='a', encoding='utf-8')
+            logger._file_handler.setFormatter(logger._file_formatter)
+            logger._file_handler.addFilter(logger._block_filter)
+            logger.addHandler(logger._file_handler)
+
+            # 更新当前日期
+            _current_log_date = new_date
+            print(f"日志文件已从 {old_date}.log 切换到: {new_log_file_path}")
+
+    def check_date_change():
+        global _current_log_date
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        return current_date != _current_log_date
+
+    # 在 logger 上绑定更新日志文件的函数
+    logger.check_date_change = check_date_change
+    logger.update_log_file = update_log_file
+    _logger = logger
+
+
+class LoggerWrapper:
+    """Logger包装器，用于支持自定义name显示"""
+
+    def __init__(self, logger, custom_name=None):
+        self._logger = logger
+        self._custom_name = custom_name or "Eridanus"
+
+    def _check_and_update_log_file(self):
+        """检查并更新日志文件（如果日期发生变化）"""
+        if hasattr(self._logger, 'check_date_change') and self._logger.check_date_change():
+            with _lock:  # 使用锁确保线程安全
+                # 再次检查（双重检查锁定模式）
+                if self._logger.check_date_change():
+                    self._logger.update_log_file()
+
+    def _log_with_category(self, level, message, category=None, *args, **kwargs):
+        """带类别的日志记录方法"""
+        self._check_and_update_log_file()
+        # 创建LogRecord
+        record = self._logger.makeRecord(
+            self._custom_name,  # 使用自定义名称
+            level,
+            __file__,
+            0,
+            message,
+            args,
+            None
+        )
+
+        # 添加category属性
+        if category:
+            record.category = category
+
+        # 发送记录
+        self._logger.handle(record)
+
+    def debug(self, message, *args, **kwargs):
+        # DEBUG被禁用，直接返回
+        pass
+
+    def info(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.INFO):
+            self._log_with_category(logging.INFO, message, None, *args, **kwargs)
+
+    def warning(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.WARNING):
+            self._log_with_category(logging.WARNING, message, None, *args, **kwargs)
+
+    def error(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.ERROR):
+            self._log_with_category(logging.ERROR, message, None, *args, **kwargs)
+
+    def critical(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.CRITICAL):
+            self._log_with_category(logging.CRITICAL, message, None, *args, **kwargs)
+
+    def info_msg(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.INFO) and "INFO_MSG" not in _blocked_loggers:
+            self._log_with_category(logging.INFO, message, 'msg', *args, **kwargs)
+
+    def info_func(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.INFO) and "INFO_FUNC" not in _blocked_loggers:
+            self._log_with_category(logging.INFO, message, 'func', *args, **kwargs)
+
+    def server(self, message, *args, **kwargs):
+        if self._logger.isEnabledFor(logging.INFO) and "SERVER" not in _blocked_loggers:
+            self._log_with_category(logging.INFO, message, 'server', *args, **kwargs)
+
+    def update_log_file(self):
+        """手动更新日志文件"""
+        if hasattr(self._logger, 'update_log_file'):
+            with _lock:
+                self._logger.update_log_file()
+
+
+def get_logger(name=None, blocked_loggers=None) -> LoggerWrapper:
+    """
+    获取logger实例，支持自定义显示名称
+
+    Args:
+        name: 自定义的显示名称，如果为None则使用默认的"Eridanus"
+        blocked_loggers: 要屏蔽的日志类别列表
+
+    Returns:
+        LoggerWrapper: 包装后的logger实例
+    """
+    global _logger
+    with _lock:  # 使用锁确保线程安全
+        if _logger is None:
+            createLogger(blocked_loggers)
+    return LoggerWrapper(_logger, name)

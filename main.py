@@ -6,6 +6,7 @@ import asyncio
 import threading
 import traceback
 import logging
+import subprocess
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 if sys.platform == 'win32':
@@ -39,29 +40,28 @@ if config.common_config.basic_config["webui"]["enable"]:
     bot1.logger.server("🔧 WebUI 初始账号密码均为 eridanus")
     bot1.logger.server("🔧 WebUI 初始账号密码均为 eridanus")
     bot1.logger.server("🔧 WebUI 初始账号密码均为 eridanus")
-    webui_dir = os.path.abspath(os.getcwd() + "/web")
-    sys.path.append(webui_dir)
-
-
-    def run_webui():
-        """在子线程中运行 WebUI，隔离模块加载路径"""
+    def run_fastapi_backend():
+        """在子线程中运行 FastAPI 后端"""
         try:
-            # 确保 WebUI 模块可以从 webui_dir 加载
-            bot1.logger.info(f"WebUI 线程：启动 WebUI，模块路径 {webui_dir}")
-            from web.server_new import start_webui
-            start_webui()
+            fastapi_script_path = os.path.abspath(os.path.join(os.getcwd(), "web", "run_fastapi.py"))
+            bot1.logger.info(f"FastAPI 线程：启动 FastAPI 后端，脚本路径 {fastapi_script_path}")
+            
+            # 使用 subprocess 启动 FastAPI 进程
+            # 使用 sys.executable 确保使用相同的 Python 解释器
+            subprocess.run([sys.executable, fastapi_script_path], check=True)
+            
         except Exception as e:
-            bot1.logger.error(f"WebUI 线程：启动 WebUI 失败：{e}")
+            bot1.logger.error(f"FastAPI 线程：启动 FastAPI 后端失败：{e}")
             traceback.print_exc()
 
 
     external_cwd = os.getcwd()
     bot1.logger.info(f"主线程：外部程序运行在 {external_cwd}")
 
-    # 在子线程中启动 WebUI
-    webui_thread = threading.Thread(target=run_webui, daemon=True)
+    # 在子线程中启动 FastAPI 后端
+    webui_thread = threading.Thread(target=run_fastapi_backend, daemon=True)
     webui_thread.start()
-    bot1.logger.info("主线程：WebUI 已启动在子线程中")
+    bot1.logger.info("主线程：FastAPI 后端已启动在子线程中")
 
 
 async def load_plugins(bot, config, bot_name="main"):
