@@ -34,7 +34,7 @@ async def get_msg(start=0, end=1) -> list:
         async with db.execute("SELECT data FROM conversation_history ORDER BY msg_id DESC LIMIT ? OFFSET ?", (end - start + 1, start)) as cursor:
             results = await cursor.fetchall()
             if results:
-                return [row[0] for row in results] # Return list of strings
+                return results
             else:
                 return []
 
