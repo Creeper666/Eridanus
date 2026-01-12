@@ -72,7 +72,16 @@ if os.path.exists(DIST_DIR):
 else:
     logger.warning(f"静态文件目录不存在: {DIST_DIR}")
 
-@app.on_event("startup")
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动事件
+    from .services.chat_service import init_db
+    await init_db()
+    logger.info("Eridanus WebUI Backend Started")
+    yield
+    # 关闭事件（如需可在此处添加）
 async def startup_event():
     from .services.chat_service import init_db
     await init_db()

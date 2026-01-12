@@ -7,6 +7,9 @@ import socket
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi_app.utils.helpers import install_and_import
+from fastapi_app.utils.logger import get_logger
+
+logger = get_logger("WebUI")
 
 # 检查并安装依赖
 install_and_import("fastapi")
@@ -23,19 +26,27 @@ install_and_import("hypercorn") # 使用 hypercorn 以更好地支持双栈
 from hypercorn.config import Config
 from hypercorn.asyncio import serve
 from fastapi_app.main import app
+from fastapi_app.config import DEFAULT_PORT
 
 def is_port_in_use(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 async def main():
-    port = 5007
+    port = DEFAULT_PORT
     if is_port_in_use(port):
-        print(f"警告: 端口 {port} 已被占用，尝试使用其他端口...")
-        # 这里可以选择退出或换端口，但为了保持兼容性，最好还是 5007
-        # 或者提示用户关闭旧服务
-        # print("请先关闭旧的服务器 (server_new.py)")
-        
+        while True:
+            logger.warning(f"端口 {port} 已被占用！")
+            time.sleep(5)
+    '''
+    while is_port_in_use(port) and port < 65535:
+        logger.warning(f"端口 {port} 已被占用，尝试使用端口 {port+1}")
+        port += 1
+        # 自动选择下一个可用端口，直到可用为止。如果端口范围 5007-65535 均被占用，提示用户关闭旧服务。
+        if port >= 65535:
+            logger.error("端口范围 5007-65535 均被占用，无法启动服务器!")
+            return
+    '''
     config = Config()
     # 尝试绑定 IPv6 (在支持双栈的系统上也会绑定 IPv4) 和 IPv4
     # 在某些系统上，绑定 [::] 会自动包含 IPv4，重复绑定 0.0.0.0 会报错
@@ -43,19 +54,19 @@ async def main():
     # 所以为了保险，我们尝试同时绑定，但要注意处理 potential error。
     # Hypercorn 允许绑定列表。
     
-    config.bind = ["0.0.0.0:5007", "[::]:5007"]
-    config.accesslog = "-" # 输出到 stdout
-    config.errorlog = "-"
+    config.bind = [f"0.0.0.0:{port}", f"[::]:{port}"]
+    config.accesslog = None # 禁用访问日志输出
+    config.errorlog = "-" # 保留错误日志
     
-    print(f"正在启动 FastAPI 服务器，监听端口 {port} (IPv4 & IPv6)...")
-    print(f"WebUI 地址: http://localhost:{port}")
+    logger.info(f"正在启动 FastAPI 服务器，监听端口 {port} (IPv4 & IPv6)...")
+    logger.info(f"WebUI 地址: http://localhost:{port}")
     
     try:
         await serve(app, config)
     except Exception as e:
-        print(f"启动失败: {e}")
-        print("尝试仅绑定 IPv4...")
-        config.bind = ["0.0.0.0:5007"]
+        logger.error(f"启动失败: {e}")
+        logger.info("尝试仅绑定 IPv4...")
+        config.bind = [f"0.0.0.0:{port}"]
         await serve(app, config)
 
 if __name__ == "__main__":

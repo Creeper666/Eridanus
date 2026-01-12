@@ -2,6 +2,9 @@ import os
 import sys
 from ruamel.yaml import YAML
 
+# 默认端口
+DEFAULT_PORT = 5007
+
 # 路径配置
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.dirname(BASE_DIR)
@@ -17,8 +20,9 @@ GIT_PATH = CUSTOM_GIT_PATH if os.path.exists(CUSTOM_GIT_PATH) else "git"
 
 # 鉴权配置
 AUTH_DURATION = 720000
-IP_WHITELIST = ["127.0.0.1","192.168.195.128","192.168.195.137","::1"] # ["127.0.0.1", "::1"]
+IP_WHITELIST = ["127.0.0.1","192.168.195.128","192.168.195.180","::1"] # ["127.0.0.1", "::1"]
 # IP_WHITELIST = []
+
 # YAML 解析器初始化
 yaml = YAML()
 yaml.preserve_quotes = True

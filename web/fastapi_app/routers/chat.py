@@ -112,23 +112,7 @@ async def get_music_api(request: Request):
 @router.get("/api/chat/get_history", dependencies=[Depends(verify_auth)])
 async def get_history_api(start: int, end: int):
     try:
-        # 这里的 start/end 是 offset/limit 还是 index?
-        # 原代码: get_msg(start, end) -> LIMIT (end-start+1) OFFSET start
         result = await get_msg(start, end)
-        # 结果已经是 list of strings (json string)
-        # 前端可能期望是 json objects? 
-        # 原代码: return jsonify({"data": result})，result 是 list of tuples?
-        # 原代码 chatdb_manage.py: SELECT data ... return results (fetchall returns tuples)
-        # 所以原代码返回的是 [[json_str], [json_str]]? 或者 [json_str, json_str]?
-        # 仔细看 chatdb_manage.py: results = await cursor.fetchall() -> [(data,), (data,)]
-        # Flask jsonify 会把 list of tuples 序列化。
-        # 我在 chat_service.py 中修改了 get_msg 返回 [row[0] for row in results]，即 [str, str]
-        # 但是这些 str 是 json 字符串。FastAPI 直接返回 list of str。
-        # 前端可能需要 parse。
-        # 为了兼容，如果原代码返回的是 json 对象列表，我应该 parse 它们。
-        # 原代码 server_new.py: return jsonify({"data": result})
-        # 如果数据库存的是 json 字符串，Flask jsonify 不会自动 parse 内部的 json 字符串。
-        # 所以前端拿到的 data 是 ["{...}", "{...}"]
         return {"data": result}
     except Exception as e:
         return {"error": str(e)}
